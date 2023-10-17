@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain, Tray, Menu} = require('electron');
+const path = require("path");
 const fs = require('fs');
 const os_util = require('node-os-utils');
 const os = require("os");
@@ -6,12 +7,23 @@ const child_process = require("child_process");
 
 const si = require('systeminformation');//npm install systeminformation
 
+const { SerialPort } = require('serialport');
+
+const { listPorts, openPort, write, closePort } = require('./serialCommunication');
+
+
 const platform = process.platform;
 
 let mainWindow;
 let isQuiting;
 let tray;
 
+/*
+SerialPort.list().then(
+    ports => ports.forEach(console.log),
+    err => console.error(err)
+);
+*/
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -201,6 +213,68 @@ async function getnetusage() {
         }
     }
 }
+
+
+/*
+listPorts().then((ports) => {
+    //console.log('Available ports:', ports);
+    const comPort = 'COM28'; // Replace with the COM port you want to open
+    const selectedPort = ports.find((port) => port.path === comPort);
+  
+    if (selectedPort) {
+      openPort(selectedPort.path, 115200); // Open the specified COM port
+      write('Hello, Arduino!\n'); // Send data
+      closeSerialPort();
+    } else {
+      console.error(`COM port ${comPort} not found.`);
+    }
+});
+*/
+
+function writeHexData(port, hexData) {
+    if (port && port.isOpen) {
+      // Convert the hexadecimal string to a buffer
+      const bufferData = Buffer.from(hexData, 'hex');
+      
+      console.log('zzk 11111111111111111111111');
+      port.write(bufferData, (err) => {
+        if (err) {
+          console.error('Error writing to port:', err);
+        } else {
+          console.log('Data sent successfully:', hexData);
+        }
+      });
+    } else {
+      console.error('Port is not open.');
+    }
+    console.log('zzk 2222222222222222222222');
+  }
+  
+  listPorts().then((ports) => {
+    
+    const comPort = 'COM28'; // Replace with the COM port you want to open
+    const selectedPort = ports.find((port) => port.path === comPort);
+
+    console.log('zzk 00000000000000000000000000000=', selectedPort);
+    if (selectedPort) {
+      openPort(selectedPort.path, 115200); // Open the specified COM port
+      
+      // Send the specified hexadecimal data
+      const hexData = 'a503065a4d175a';
+      writeHexData(selectedPort, hexData);
+      
+      closePort(); // Close the port after sending the data
+    } else {
+      console.error(`COM port ${comPort} not found.`);
+    }
+    
+    console.log('zzk 44444444444444444444444444');
+  });
+  
+
+
+
+
 
 
 // open notepad
