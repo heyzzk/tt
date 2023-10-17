@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>File System Application</title>
+
     <script>window.$ = window.jQuery = require('jquery');</script>
     <!-- Latest compiled and minified CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css"
@@ -25,7 +26,16 @@
             background: transparent;
         }
     </style>
-
+    <style>
+        #usage_mem {
+            color: green; /* Set the text color to red */
+        }
+    </style>
+    <style>
+        #usage_net {
+            color: red; /* Set the text color to red */
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-default">
@@ -92,6 +102,12 @@
              aria-valuemin="0" aria-valuemax="100" style="width:0%">
         </div>
     </div>
+    <div>
+        <p id="usage_mem"> USAGE_MEM </p>
+    </div>
+    <div>
+        <p id="usage_net"> USAGE_NET </p>
+    </div>
     <input class="btn btn-warning" onclick="open_notepad();" type="button" value="Open Notepad">
     <input class="btn btn-danger" onclick="open_folder();" type="button" value="Open Folder">
     <div>
@@ -110,7 +126,21 @@
     //});
 
     ipcRenderer.on('cpu', function (event, data) {
-        $('.cpu-progress').text(data + '% CPU');
+        $('.cpu-progress').text("CPU:" + data + '% CPU');
+        console.log("zzk get cpu usage", data);
+    });
+
+    ipcRenderer.send('get-mem', {});
+    ipcRenderer.on('mem', function (event, data) {
+        //$('.mem-progress').text(data + '% CPU');
+        document.getElementById("usage_mem").innerHTML = "MEM:" + data;
+        console.log("zzk get mem usage", data);
+    });
+
+    ipcRenderer.send('get-net', {});
+    ipcRenderer.on('net', function (event, data) {
+        document.getElementById("usage_net").innerHTML = "NET:" + data;
+        console.log("zzk get net usage", data);
     });
 
     ipcRenderer.on('uptime', function (event, data) {
