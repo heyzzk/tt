@@ -7,9 +7,11 @@ const child_process = require("child_process");
 
 const si = require('systeminformation');//npm install systeminformation
 
-const { SerialPort } = require('serialport');
+const crcLib = require('crc');//npm install crc
 
-const { listPorts, openPort, write, closePort } = require('./serialCommunication');
+//const { SerialPort } = require('serialport');
+
+//const { listPorts, openPort, write, closePort } = require('./serialCommunication');
 
 
 const platform = process.platform;
@@ -17,6 +19,12 @@ const platform = process.platform;
 let mainWindow;
 let isQuiting;
 let tray;
+
+let g_cpu = 0
+let g_mem = 0
+let g_dic = 0
+let g_net = 0
+let g_len = 3
 
 /*
 SerialPort.list().then(
@@ -101,7 +109,7 @@ function createWindow() {
 
             // Display the network speed information in your HTML
             mainWindow.webContents.send('network-speed', selectedInterface);
-            console.log("zzk ipcMain get-net2 ", selectedInterface);
+            //console.log("zzk ipcMain get-net2 ", selectedInterface);
         } catch (error) {
             console.error('Error measuring network speed:', error);
         }
@@ -127,7 +135,7 @@ ipcMain.on('select-file', (event, arg) => {
 
 // Get CPU Usage
 ipcMain.on('get-cpu', (event, arg) => {
-    console.log("zzk ipcMain get-cpu");
+    //console.log("zzk ipcMain get-cpu");
     setInterval(getcpuusage, 500)
 });
 function getcpuusage() {
@@ -136,7 +144,8 @@ function getcpuusage() {
     cpu.usage()
         .then(info => {
             mainWindow.webContents.send('cpu', info)
-            console.log("zzk send cpu usage", info.toString());
+            //console.log("zzk send cpu usage", parseInt(info).toString());
+            g_cpu = parseInt(info)
             // send uptime to front end
             mainWindow.webContents.send('uptime', os.uptime());
         })
@@ -144,7 +153,7 @@ function getcpuusage() {
 
 // Get MEM Usage
 ipcMain.on('get-mem', (event, arg) => {
-    console.log("zzk ipcMain get-mem");
+    //console.log("zzk ipcMain get-mem");
     setInterval(getmemusage, 500)
 });
 function getmemusage() {
@@ -153,9 +162,32 @@ function getmemusage() {
     mem.used()
         .then(info => {
             mainWindow.webContents.send('mem', info.usedMemMb/info.totalMemMb)
-            console.log("zzk send mem usage", info.usedMemMb/info.totalMemMb);
+            //console.log("zzk send mem usage", info.usedMemMb/info.totalMemMb);
+            g_mem = parseInt(100*info.usedMemMb/info.totalMemMb)
         })
 }
+
+si.fsSize()
+  .then(data => {
+    data.forEach(driveInfo => {
+      const used = driveInfo.used;
+      const total = driveInfo.size;
+      const percentageUsed = (used / total) * 100;
+      const device = driveInfo.fs;
+
+      g_dic = parseInt(percentageUsed);
+/*
+      console.log(`Drive Information for ${device}:`);
+      console.log(`Used: ${used} bytes`);
+      console.log(`Total: ${total} bytes`);
+      console.log(`Percentage Used: ${percentageUsed}%`);
+      console.log('-------------------');
+*/
+    });
+  })
+  .catch(error => {
+    console.error('Error retrieving drive information:', error);
+  });
 
 // Get Network Usage
 ipcMain.on('get-net', async (event, arg) => {
@@ -186,10 +218,12 @@ async function getnetusage() {
         
               // Check if rx_sec and tx_sec properties exist
               if ('rx_sec' in interfaceStats && 'tx_sec' in interfaceStats) {
+                /*
                 console.log('Received Bytes:', interfaceStats.rx_bytes);
                 console.log('Sent Bytes:', interfaceStats.tx_bytes);
                 console.log('Received Speed (bytes/sec):', interfaceStats.rx_sec);
                 console.log('Sent Speed (bytes/sec):', interfaceStats.tx_sec);
+                */
               } else {
                 console.error('Network speed properties not found.');
               }
@@ -206,7 +240,7 @@ async function getnetusage() {
             const selectedInterface = networkStats.find(interface => interface.iface === 'eno1');
             if (selectedInterface) {
                 mainWindow.webContents.send('net', selectedInterface.rx_sec);
-                console.log("zzk ipcMain get-net2 ", selectedInterface.rx_sec);
+                //console.log("zzk ipcMain get-net2 ", selectedInterface.rx_sec);
             }
         } catch (error) {
             console.error('Error measuring network speed:', error);
@@ -214,67 +248,75 @@ async function getnetusage() {
     }
 }
 
-
-/*
-listPorts().then((ports) => {
-    //console.log('Available ports:', ports);
-    const comPort = 'COM28'; // Replace with the COM port you want to open
-    const selectedPort = ports.find((port) => port.path === comPort);
-  
-    if (selectedPort) {
-      openPort(selectedPort.path, 115200); // Open the specified COM port
-      write('Hello, Arduino!\n'); // Send data
-      closeSerialPort();
-    } else {
-      console.error(`COM port ${comPort} not found.`);
-    }
-});
-*/
-
 function writeHexData(port, hexData) {
-    if (port && port.isOpen) {
-      // Convert the hexadecimal string to a buffer
+    if (port) {
       const bufferData = Buffer.from(hexData, 'hex');
       
-      console.log('zzk 11111111111111111111111');
       port.write(bufferData, (err) => {
         if (err) {
           console.error('Error writing to port:', err);
-        } else {
-          console.log('Data sent successfully:', hexData);
         }
       });
     } else {
-      console.error('Port is not open.');
+      console.error('writeHexData: Port is not open.');
     }
-    console.log('zzk 2222222222222222222222');
-  }
-  
-  listPorts().then((ports) => {
-    
-    const comPort = 'COM28'; // Replace with the COM port you want to open
-    const selectedPort = ports.find((port) => port.path === comPort);
+}
 
-    console.log('zzk 00000000000000000000000000000=', selectedPort);
-    if (selectedPort) {
-      openPort(selectedPort.path, 115200); // Open the specified COM port
-      
-      // Send the specified hexadecimal data
-      const hexData = 'a503065a4d175a';
-      writeHexData(selectedPort, hexData);
-      
-      closePort(); // Close the port after sending the data
-    } else {
-      console.error(`COM port ${comPort} not found.`);
-    }
-    
-    console.log('zzk 44444444444444444444444444');
-  });
-  
+function listPorts() {
+    return SerialPort.list()
+      .then(ports => {
+        console.log('Available serial ports:');
+        ports.forEach(port => {
+          console.log(`Port: ${port.path}, Manufacturer: ${port.manufacturer || 'N/A'}`);
+        });
+      })
+      .catch(error => {
+        console.error('Error listing serial ports:', error);
+      });
+}
 
+const { SerialPort, ReadlineParser } = require('serialport')
+//const port = new SerialPort({ path: '/dev/ttyUSB0', baudRate: 115200 })
+const port = new SerialPort({ path: 'COM29', baudRate: 115200 })
+const parser = new ReadlineParser()
+port.pipe(parser)
+//parser.on('data', console.log)
+//port.write('ROBOT PLEASE RESPOND\n')
 
+//listPorts()
 
 
+const hexData = 'a503065a4d175a';
+//writeHexData(port, hexData);
+
+
+function myTask() {
+
+
+    // Create a buffer for the data
+    const dataBuffer = Buffer.alloc(11);
+
+    // Construct the packet
+    dataBuffer.writeUInt8(0xA5, 0); // Start of packet
+    dataBuffer.writeUInt8(g_len, 1);
+    dataBuffer.writeUInt8(g_cpu, 2); // CPU value
+    dataBuffer.writeUInt8(g_mem, 3); // Memory value
+    dataBuffer.writeUInt8(g_dic, 4); // Disk value
+
+    // Calculate CRC over the data (excluding the CRC field itself)
+    //console.log(dataBuffer.subarray(2, 5));
+    const crcValue = crcLib.crc8(dataBuffer.subarray(2, 5));
+
+    console.log("data to send:",g_cpu, g_mem, g_dic, crcValue)
+
+    // Write the CRC value (2 bytes) to the buffer
+    dataBuffer.writeUInt8(crcValue, 5);
+
+    dataBuffer.writeUInt8(0x5A, 6); // End of packet
+
+    writeHexData(port, dataBuffer);
+}  
+const intervalId = setInterval(myTask, 100);
 
 
 // open notepad
@@ -286,3 +328,10 @@ ipcMain.on('open-notepad', (event, arg) => {
 ipcMain.on('open-folder', (event, arg) => {
     child_process.exec('start "" "C:\\Program Files"')
 });
+
+console.log("zzk end");
+
+
+
+
+//http://tcngbuildserver:8080/view/Firmware%20Builds/job/Official_Firmware_Production_Build/
