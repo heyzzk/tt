@@ -5,14 +5,14 @@ const os_util = require('node-os-utils');
 const os = require("os");
 const child_process = require("child_process");
 
+const { SerialPort, ReadlineParser } = require('serialport')
+
 const si = require('systeminformation');//npm install systeminformation
 
 const crcLib = require('crc');//npm install crc
 
-//const { SerialPort } = require('serialport');
-
-//const { listPorts, openPort, write, closePort } = require('./serialCommunication');
-
+const sys_utils = require('./sys_utils');
+const serial_comm = require('./serial_comm');
 
 const platform = process.platform;
 
@@ -26,6 +26,10 @@ let g_dic = 0
 let g_net = 0
 let g_len = 3
 
+let g_selected_port;
+let port;
+let parser;
+
 /*
 SerialPort.list().then(
     ports => ports.forEach(console.log),
@@ -37,6 +41,8 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 500,
         height: 420,
+        x: 2100,
+        y: 600,
         // maxWidth:1000,
         icon:"icon.png",
         webPreferences: {   //zzk for error require('electron').ipcRenderer; require is not defined
@@ -46,6 +52,8 @@ function createWindow() {
     });
     mainWindow.loadFile('index.html');
     //mainWindow.maximize();
+
+
 
     // create system tray
     var appIcon = new Tray("icon.png");
@@ -99,22 +107,6 @@ function createWindow() {
     mainWindow.on('show', function () {
         appIcon.setHighlightMode('always')
     });
-
-    // Create a function to measure network speed
-    const measureNetworkSpeed = async () => {
-        try {
-            const networkStats = await si.networkStats();
-            // Select the network interface you want to monitor, e.g., 'eth0' or 'wlan0'
-            const selectedInterface = networkStats.find(interface => interface.iface === 'eth0');
-
-            // Display the network speed information in your HTML
-            mainWindow.webContents.send('network-speed', selectedInterface);
-            //console.log("zzk ipcMain get-net2 ", selectedInterface);
-        } catch (error) {
-            console.error('Error measuring network speed:', error);
-        }
-    };
-    setInterval(measureNetworkSpeed, 5000);
 }
 
 console.log("zzk start");
@@ -133,38 +125,37 @@ ipcMain.on('select-file', (event, arg) => {
     })
 });
 
+// get serial port list
+ipcMain.on('get-serial-list', (event, arg) => {
+    SerialPort.list().then((ports) => {
+        //console.log(ports);
+        mainWindow.webContents.send('serial-ports', ports);
+    });
+});
+ipcMain.on('selected-port', (event, selectedPort) => {
+    // Handle the selected port in the main process
+    console.log(`Selected port in main process: ${selectedPort}`);
+    g_selected_port = selectedPort;
+});
+
 // Get CPU Usage
 ipcMain.on('get-cpu', (event, arg) => {
-    //console.log("zzk ipcMain get-cpu");
     setInterval(getcpuusage, 500)
 });
-function getcpuusage() {
-    var cpu = os_util.cpu;
-    
-    cpu.usage()
-        .then(info => {
-            mainWindow.webContents.send('cpu', info)
-            //console.log("zzk send cpu usage", parseInt(info).toString());
-            g_cpu = parseInt(info)
-            // send uptime to front end
-            mainWindow.webContents.send('uptime', os.uptime());
-        })
+async function getcpuusage() {
+    const cpu = await sys_utils.get_cpu_percent();
+    //console.log("zzk ipcMain get-cpu", cpu);
+    mainWindow.webContents.send('cpu', cpu.toString())
 }
 
 // Get MEM Usage
 ipcMain.on('get-mem', (event, arg) => {
-    //console.log("zzk ipcMain get-mem");
     setInterval(getmemusage, 500)
 });
-function getmemusage() {
-    var mem = os_util.mem;
-
-    mem.used()
-        .then(info => {
-            mainWindow.webContents.send('mem', info.usedMemMb/info.totalMemMb)
-            //console.log("zzk send mem usage", info.usedMemMb/info.totalMemMb);
-            g_mem = parseInt(100*info.usedMemMb/info.totalMemMb)
-        })
+async function getmemusage() {
+    const mem = await sys_utils.get_mem_percent();
+    //console.log("zzk ipcMain get-cpu", cpu);
+    mainWindow.webContents.send('mem', mem.toString())
 }
 
 si.fsSize()
@@ -187,7 +178,7 @@ si.fsSize()
   })
   .catch(error => {
     console.error('Error retrieving drive information:', error);
-  });
+});
 
 // Get Network Usage
 ipcMain.on('get-net', async (event, arg) => {
@@ -239,7 +230,7 @@ async function getnetusage() {
             const networkStats = await si.networkStats();
             const selectedInterface = networkStats.find(interface => interface.iface === 'eno1');
             if (selectedInterface) {
-                mainWindow.webContents.send('net', selectedInterface.rx_sec);
+                mainWindow.webContents.send('net', parseInt(selectedInterface.rx_sec));
                 //console.log("zzk ipcMain get-net2 ", selectedInterface.rx_sec);
             }
         } catch (error) {
@@ -262,32 +253,24 @@ function writeHexData(port, hexData) {
     }
 }
 
-function listPorts() {
-    return SerialPort.list()
-      .then(ports => {
-        console.log('Available serial ports:');
-        ports.forEach(port => {
-          console.log(`Port: ${port.path}, Manufacturer: ${port.manufacturer || 'N/A'}`);
-        });
-      })
-      .catch(error => {
-        console.error('Error listing serial ports:', error);
-      });
-}
 
-const { SerialPort, ReadlineParser } = require('serialport')
-//const port = new SerialPort({ path: '/dev/ttyUSB0', baudRate: 115200 })
-const port = new SerialPort({ path: 'COM29', baudRate: 115200 })
-const parser = new ReadlineParser()
+
+
+
+
+
+
+
+
+port = new SerialPort({ path: '/dev/ttyUSB0', baudRate: 115200 })
+//const port = new SerialPort({ path: 'COM29', baudRate: 115200 })
+parser = new ReadlineParser()
 port.pipe(parser)
 //parser.on('data', console.log)
 //port.write('ROBOT PLEASE RESPOND\n')
 
-//listPorts()
 
-
-const hexData = 'a503065a4d175a';
-//writeHexData(port, hexData);
+console.log("port.isOpen=",port.isOpen);
 
 
 function myTask() {
@@ -307,13 +290,14 @@ function myTask() {
     //console.log(dataBuffer.subarray(2, 5));
     const crcValue = crcLib.crc8(dataBuffer.subarray(2, 5));
 
-    console.log("data to send:",g_cpu, g_mem, g_dic, crcValue)
+    //console.log("data to send:",g_cpu, g_mem, g_dic, crcValue)
 
     // Write the CRC value (2 bytes) to the buffer
     dataBuffer.writeUInt8(crcValue, 5);
 
     dataBuffer.writeUInt8(0x5A, 6); // End of packet
 
+    //console.log("port.isOpen=",port.isOpen);
     writeHexData(port, dataBuffer);
 }  
 const intervalId = setInterval(myTask, 100);
@@ -331,7 +315,3 @@ ipcMain.on('open-folder', (event, arg) => {
 
 console.log("zzk end");
 
-
-
-
-//http://tcngbuildserver:8080/view/Firmware%20Builds/job/Official_Firmware_Production_Build/

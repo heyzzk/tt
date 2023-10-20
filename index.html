@@ -36,6 +36,12 @@
             color: red; /* Set the text color to red */
         }
     </style>
+    <style>
+        /* Apply the CSS style to the <p> element */
+        p {
+        color: white;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-default">
@@ -114,11 +120,19 @@
         <p id="uptime_timer"> Uptime </p>
     </div>
 
+    <p>serial port</p>
+    <select id="myDropdown">
+        <!-- option value="option1">Option 1</option -->
+        <option value=""> -- Select an option -- </option>
+    </select>
+      
+
 </div>
 
 </body>
 
 <script>
+    const DEBUG = false
     const ipcRenderer = require('electron').ipcRenderer;
     ipcRenderer.send('get-cpu', {});
     //ipcRenderer.on('cpu', function (event, data) {
@@ -127,20 +141,20 @@
 
     ipcRenderer.on('cpu', function (event, data) {
         $('.cpu-progress').text("CPU:" + data + '% CPU');
-        console.log("zzk get cpu usage", data);
+        if(DEBUG) console.log("zzk get cpu usage", data);
     });
 
     ipcRenderer.send('get-mem', {});
     ipcRenderer.on('mem', function (event, data) {
         //$('.mem-progress').text(data + '% CPU');
         document.getElementById("usage_mem").innerHTML = "MEM:" + data;
-        console.log("zzk get mem usage", data);
+        if(DEBUG) console.log("zzk get mem usage", data);
     });
 
     ipcRenderer.send('get-net', {});
     ipcRenderer.on('net', function (event, data) {
         document.getElementById("usage_net").innerHTML = "NET:" + data;
-        console.log("zzk get net usage", data);
+        if(DEBUG) console.log("zzk get net usage", data);
     });
 
     ipcRenderer.on('uptime', function (event, data) {
@@ -155,6 +169,36 @@
 
     function open_folder() {
         ipcRenderer.send('open-folder', {})
+    }
+
+    const v_myDropdown = document.getElementById('myDropdown');
+    ipcRenderer.send('get-serial-list', {});
+    ipcRenderer.on('serial-ports', (event, ports) => {
+        // Clear any existing options
+        //v_myDropdown.innerHTML = '';
+
+        // Add each serial port to the dropdown
+        ports.forEach((port) => {
+            console.log("index port=", port.path);
+            const option = document.createElement('option');
+            option.text = port.path;
+            option.value = port.manufacturer;
+            
+            v_myDropdown.appendChild(option);
+        });
+    });
+    v_myDropdown.addEventListener('change', logSelectedPort);
+    function logSelectedPort() {
+        const selectedIndex = v_myDropdown.selectedIndex; // Get the index of the selected option
+        if (selectedIndex !== -1) {
+            const selectedOption = v_myDropdown.options[selectedIndex]; // Get the selected option
+            const selectedPortPath = selectedOption.text;
+            console.log(`Selected port: ${selectedPortPath}`);
+
+            ipcRenderer.send('selected-port', selectedPortPath);
+        } else {
+            console.log('No port selected.');
+        }
     }
 
 </script>
